@@ -1,2 +1,4 @@
 pygame
 black
+numpy
+matplotlib

@@ -1,81 +1,110 @@
-import math as m
+import numpy as np
+from numpy.linalg import inv
+from math import sin, pi, cos
+import matplotlib.pyplot as plt
 import pygame
-from pygame import event
-from pygame import draw
 
-# Setup window
+
+def G(y, t):
+    """Runga Kutta: G(y, t) is vector function for accelaration, where
+    y = [theta_dot, theta] and t is time"""
+    theta1_dot, theta1 = y[0], y[1]
+    return np.array([-g / l1 * sin(theta1), theta1_dot])
+
+
+def RK4_step(y, t, dt):
+    """Runga Kutta 4th order solution of EOM; returns delta_y"""
+    k1 = G(y, t)
+    k2 = G(y + 0.5 * k1 * dt, t + 0.5 * dt)
+    k3 = G(y + 0.5 * k2 * dt, t + 0.5 * dt)
+    k4 = G(y + k3 * dt, t + dt)
+
+    return dt * (k1 + 2 * k2 + 2 * k3 + k4) / 6
+
+
+def update(theta1):
+    SCALE = 100
+
+    x = l1 * sin(theta1)
+    y = -l1 * cos(theta1)
+
+    return (x * SCALE + ORIGIN[0], -y * SCALE + ORIGIN[1])
+
+
+def render(point1):
+    # Clear screen
+    screen.fill(BLACK)
+    # Draw cart, rod and mass
+    pygame.draw.line(screen, RED, ORIGIN, point1, 5)
+    pygame.draw.rect(
+        screen,
+        WHITE,
+        (
+            ORIGIN[0] - CART_WIDTH / 2,
+            ORIGIN[1] - CART_HEIGHT / 2,
+            CART_WIDTH,
+            CART_HEIGHT,
+        ),
+    )
+    pygame.draw.circle(screen, RED, ORIGIN, 3)
+    pygame.draw.circle(screen, BLUE, point1, m1 * 10)
+
+
+# Pygame paramters
 running = True
-pygame.init()
-size_x = 800
-size_y = 600
-screen = pygame.display.set_mode([size_x, size_y])
-
-# Define colors
+w = 800
+h = 600
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+RED = (255, 0, 0)
 BLUE = (0, 0, 255)
-
-# Parameters
+LT_BLUE = (230, 230, 255)
 CART_WIDTH = 100
 CART_HEIGHT = 20
-X_ORIGIN = size_x / 2
-Y_ORIGIN = size_y - 100
-ROD_LENGTH = 100
-GRAV = 9.81
-M_CART = 5
-M_BALL = 0.5
+ORIGIN = (w / 2, h / 2)
+TEXT_POSITION = (10, 10)
 
+pygame.init()
+screen = pygame.display.set_mode([w, h])
+pygame.display.update()
+clock = pygame.time.Clock()
 
-# Object definitions
-def draw_cart(x, theta=0, surface=screen):
-    # Clear screen
-    surface.fill(BLACK)
-    # Draw cart itself
-    x_cart = X_ORIGIN + x - 0.5 * CART_WIDTH
-    y_cart = Y_ORIGIN - 0.5 * CART_HEIGHT
-    pygame.draw.rect(surface, WHITE, (x_cart, y_cart, CART_WIDTH, CART_HEIGHT))
-    # Draw rod and ball mass
-    x_ball = X_ORIGIN + x - ROD_LENGTH * m.sin(theta)
-    y_ball = Y_ORIGIN - ROD_LENGTH * m.cos(theta)
-    pygame.draw.line(surface, BLUE, (X_ORIGIN + x, Y_ORIGIN), (x_ball, y_ball), 5)
-    pygame.display.update()
+# System parameters
+m1 = 2.0
+l1 = 1.0
+g = 9.81
+delta_t = 0.02
 
+# Initial state
+t = 0.0
+y = np.array(
+    [0, pi - 0.00001]
+)  # [velocities, displacements] => [v1, v2, ..., d1, d2, ...] => [dtheta1, theta1]
 
-# Main loop
-F = 0
-x = 0
-d_x = 0
-dd_x = 0
-theta = 0
-d_theta = 0
-dd_theta = 0
-dt = 0.1
-t = 0
+# Timer
+pygame.font.init()
+myfont = pygame.font.SysFont("Halvetica", 24)
+
+# Simulate/animate
 while running:
-    draw_cart(x, theta)
-    pygame.display.update()
-    
     events = pygame.event.get()
     for e in events:
         if e.type == pygame.QUIT or (
             e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE
         ):
             running = False
-    
-    # Update time for next iteration
-    t += dt
-    
-    # Calculate x equation of motion
-    dd_theta = 1/(M_CART+M_BALL) * (F + M_BALL*ROD_LENGTH*dd_theta*m.cos(theta) - M_BALL*ROD_LENGTH*d_theta**2*m.sin(theta))
-    d_theta = d_theta + dd_theta * dt
-    theta = theta + d_theta * dt
 
-    # Calculate Theta equation of motion
-    dd_x = (ROD_LENGTH*dd_theta - GRAV*m.sin(theta)) / m.cos(theta)
-    d_x = d_x + dd_x * dt
-    x = x + d_x * dt
+    point1 = update(y[1])
+    render(point1)
 
-    pygame.time.wait(5)
+    nl = "\n"
+    time_text = myfont.render(f"Time: {round(t, 1)} seconds", False, WHITE)
+    angle_text = myfont.render(f"Angle: {y[1]*180/pi:.2f} deg", False, WHITE)
+    screen.blit(time_text, (10, 10))
+    screen.blit(angle_text, (10, 35))
 
-# cleanup
-pygame.quit()
+    t += delta_t
+    y = y + RK4_step(y, t, delta_t)
+
+    clock.tick(60)
+    pygame.display.update()
